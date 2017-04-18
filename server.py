@@ -2,7 +2,6 @@
 
 import socket
 import threading
-import Queue
 import time
 import lic
 
@@ -17,7 +16,6 @@ s.bind(("", 50007))
 # listen!
 s.listen(1)
 
-gq = Queue.Queue()
 lock = threading.Lock()
 clients = []
 usersOnline = []
@@ -26,15 +24,14 @@ usersOnline = []
 # the key is the productkey
 
 class run_server(threading.Thread):
-    def __init__ (self, conn, gq):
+    def __init__ (self, conn):
         self.conn = conn
         self.socket = socket
-        self.gq = gq
         threading.Thread.__init__(self)
+
 
     def run(self):
         print threading.currentThread().getName()
-        print "global queue is", self.gq
         # lock and update the clients list
         lock.acquire()
         clients.append(self)
@@ -48,26 +45,33 @@ class run_server(threading.Thread):
         rpk = self.textin
         if l.checkLicenseAvail(host, rpk):
             l.checkOutLic(host, rpk)
-            print l.checkedOut
-            print l.totalLicenses
+            self.conn.send("***************************************\n")
+            self.conn.send("You got a lic " + host + rpk + "\n")
+            self.conn.send("***************************************\n")
         else:
             self.conn.send("There is no license available for %s\n" %rpk )
-        self.conn.send("***************************************\n")
-        self.conn.send("You got a lic " + host + rpk + "\n")
-        self.conn.send("***************************************\n")
+        print l.totalLicenses
+        print l.checkedOut
 
-        while 1:
+        #while 1:
             # take only latin strings, cuz italy
+            #time.sleep(10)
+        while 1:
+            deadline = time.time() + 20.0
+            self.conn.send("Do you still need a lic for %s\n" %rpk)
+            self.conn.send("deadline is %s\n" %deadline)
+            while not self.data:
+                if time.time() >= deadline:
+                    print "timed out"
+                    l.returnLic(host, rpk)
+                    break
             self.data = self.conn.recv(1024).decode("latin1")
-            if not self.data: break
-            #if not self.gq.empty():
-            #    print "A message is in the queue"
-            #    shoutMsg = self.gq.get()
-            #    self.conn.send(str(shoutMsg))
-            #    self.gq.task_done()
-            # we need to strip to remove whatever magic comes from telnet
+            #self.conn.settimeout(deadline - time.time())
             self.textin = str(self.data).strip()
             print "received ", self.textin, "from client"
+            #time.sleep(0.5)
+            #self.conn.settimeout(None)
+            #if not self.data: break
 
         lock.acquire()
         clients.remove(self)
@@ -78,8 +82,7 @@ threads = []
 while 1:
     conn, addr = s.accept()
     print "connected", addr
-    lq = Queue.Queue()
-    world = run_server(conn, gq)
+    world = run_server(conn)
     world.start()
     threads.append(world)
     time.sleep(0.1)

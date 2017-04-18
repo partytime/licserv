@@ -16,15 +16,16 @@ class LicServ(object):
 
     def checkLicenseAvail(self, host, productKey):
         # Returns Bool
+        if productKey not in self.totalLicenses:
+            return False
         # We already have a license checked out
-        if host in self.checkedOut[productKey]:
+        elif host in self.checkedOut[productKey]:
             return True
         # There are available licenses
         elif len(self.checkedOut[productKey]) < self.totalLicenses[productKey]:
             return True
         # Nope
-        else:
-            return False
+        return False
 
     def checkOutLic(self, host, productKey):
         lock.acquire()
@@ -49,3 +50,5 @@ class LicServ(object):
     def getCheckedOutHosts(self, productKey):
         # returns a list object
         return self.checkedOut[productKey]
+
+
