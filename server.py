@@ -4,6 +4,7 @@ import socket
 import threading
 import Queue
 import time
+import lic
 
 # create a socket to listen for new connections
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -21,10 +22,8 @@ lock = threading.Lock()
 clients = []
 usersOnline = []
 
+#TODO: globals?
 # the key is the productkey
-totalLicenses = {"soft1":10,"soft2":1,"soft3":2}
-checkedOut = {"soft1":0,"soft2":0,"soft3":0}
-#checkedOut = {"soft1":["10.82.4.5","10.82.4.7"]}
 
 class run_server(threading.Thread):
     def __init__ (self, conn, gq):
@@ -33,15 +32,6 @@ class run_server(threading.Thread):
         self.gq = gq
         threading.Thread.__init__(self)
 
-    def checkLicenseAvail(host, productKey):
-        # We already have a license checked out
-        if host in checkedOut["productKey"]:
-            return True
-        elif len(checkedOut["productKey"]) < totalLicenses["productKey"]:
-            return True
-
-
-    ##def clientConn(self):
     def run(self):
         print threading.currentThread().getName()
         print "global queue is", self.gq
@@ -49,26 +39,22 @@ class run_server(threading.Thread):
         lock.acquire()
         clients.append(self)
         lock.release()
-        #n = g.Navigation()
-        #p = g.Player()
+        l = lic.LicServ()
+        host = str(self.conn.getpeername())
         self.conn.send("Ready for data: ")
         self.data = self.conn.recv(1024).decode("latin1")
         self.textin = str(self.data).strip()
-        user = self.textin
-        if not p.checkUserExists(user):
-            self.conn.send("Your name doesn't seem to be on our list. Creating new user!\n")
-            p.addUser(user, "A new user with no description")
+        # rpk is Requested Product Key
+        rpk = self.textin
+        if l.checkLicenseAvail(host, rpk):
+            l.checkOutLic(host, rpk)
+            print l.checkedOut
+            print l.totalLicenses
+        else:
+            self.conn.send("There is no license available for %s\n" %rpk )
         self.conn.send("***************************************\n")
-        self.conn.send("WELCOME " + self.textin.upper() + "\n")
-        if u.users[user]['wizard']:
-            self.conn.send("It's a pleasure to see a managing wizard around.\n")
+        self.conn.send("You got a lic " + host + rpk + "\n")
         self.conn.send("***************************************\n")
-        self.conn.send("Enjoy the trip, my dear friend.\n")
-        self.conn.send("(If you are lost, type 'help' for a command list)\n")
-        self.conn.send("***************************************\n")
-        lock.acquire()
-        usersOnline.append(user)
-        lock.release()
 
         while 1:
             # take only latin strings, cuz italy
